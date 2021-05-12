@@ -16,6 +16,8 @@ import (
 	"google.golang.org/api/iterator"
 )
 
+const startChargeDiff int32 = 5
+
 type site struct {
 	Name                string    `firestore:"name"`
 	Vendor              string    `firestore:"vendor"`
@@ -30,16 +32,20 @@ type site struct {
 }
 
 type car struct {
-	Name         string    `firestore:"name"`
-	Vendor       string    `firestore:"vendor"`
-	CarID        int64     `firestore:"carId"`
-	AccessToken  string    `firestore:"accessToken"`
-	RefreshToken string    `firestore:"refreshToken"`
-	LastUpdated  time.Time `firestore:"lastUpdated"`
-	BatteryLevel int32     `firestore:"batteryLevel"`
-	Longitude    float64   `firestore:"longitude"`
-	Latitude     float64   `firestore:"latitude"`
-	IsCharging   bool      `firestore:"isCharging"`
+	Name              string    `firestore:"name"`
+	Vendor            string    `firestore:"vendor"`
+	CarID             int64     `firestore:"carId"`
+	AccessToken       string    `firestore:"accessToken"`
+	RefreshToken      string    `firestore:"refreshToken"`
+	LastUpdated       time.Time `firestore:"lastUpdated"`
+	BatteryLevel      int32     `firestore:"batteryLevel"`
+	ChargeLimit       int32     `firestore:"chargeLimit"`
+	Longitude         float64   `firestore:"longitude"`
+	Latitude          float64   `firestore:"latitude"`
+	IsCharging        bool      `firestore:"isCharging"`
+	IsPluggedIn       bool      `firestore:"isPluggedIn"`
+	IsChargingBySolar bool      `firestore:"isChargingBySolar"`
+	documentId        string
 }
 
 func SolarChargeTesla(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +72,7 @@ func SolarChargeTesla(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Failed to read cars: %v", err)
 	}
 
-	charging := evolve(app, sites, cars)
+	charging := investigate(app, sites, cars, ctx)
 	fmt.Fprintf(w, "charging: %s", html.EscapeString(strconv.Itoa(charging)))
 }
 
@@ -88,20 +94,27 @@ func main() {
 	fmt.Printf("cars %v\n", cars)
 }
 
-func nextState(a solarChargeTesla, s site, c car) (error) {
+func startStopCharge(a solarChargeTesla, s site, c car, ctx context.Context) error {
 	client, err := a.createCarClient(c)
 	if err != nil {
 		return err
 	}
-	if !c.IsCharging && s.SolarPower > s.StartChargeTreshold {
-		return client.startCharging(c.CarID)
-	} else if c.IsCharging && s.SolarPower < s.StopChargeTreshold {
+	if !c.IsCharging && c.IsPluggedIn && s.SolarPower > s.StartChargeTreshold {
+		if c.ChargeLimit-c.BatteryLevel > startChargeDiff {
+			err := client.startCharging(c.CarID)
+			if err != nil {
+				return err
+			}
+			return setIsChargingBySolar(a, c, ctx)
+			// TODO, set IsChargingBySolar to true
+		}
+	} else if c.IsChargingBySolar && c.IsCharging && s.SolarPower < s.StopChargeTreshold {
 		return client.stopCharging(c.CarID)
 	}
 	return nil
 }
 
-func evolve(a solarChargeTesla, sites []site, cars []car) int {
+func investigate(a solarChargeTesla, sites []site, cars []car, ctx context.Context) int {
 	charging := 0
 	for _, s := range sites {
 		siteCoord := haversine.Coord{Lat: s.Latitude, Lon: s.Longitude}
@@ -109,7 +122,7 @@ func evolve(a solarChargeTesla, sites []site, cars []car) int {
 			carCoord := haversine.Coord{Lat: c.Latitude, Lon: c.Longitude}
 			_, km := haversine.Distance(siteCoord, carCoord)
 			if km < 0.01 {
-				err := nextState(a, s, c)
+				err := startStopCharge(a, s, c, ctx)
 				if err != nil {
 					fmt.Printf("Error for car %d: %v+", c.CarID, err)
 				}
@@ -206,6 +219,12 @@ func readSites(app solarChargeTesla, ctx context.Context) ([]site, error) {
 	return sites, nil
 }
 
+func setIsChargingBySolar(app solarChargeTesla, c car, ctx context.Context) error {
+	doc := app.getFirestoreClient().Collection("cars").Doc(c.documentId)
+	_, err := doc.Update(ctx, []firestore.Update{{Path: "isChargingBySolar", Value: true}})
+	return err
+}
+
 func readCars(app solarChargeTesla, ctx context.Context) ([]car, error) {
 	iter := app.getFirestoreClient().Collection("cars").Documents(ctx)
 	cars := []car{}
@@ -218,7 +237,10 @@ func readCars(app solarChargeTesla, ctx context.Context) ([]car, error) {
 			return nil, err
 		}
 		var c car
-		doc.DataTo(&c)
+		err = doc.DataTo(&c)
+		if err != nil {
+			return nil, err
+		}
 		if c.LastUpdated.IsZero() || time.Now().UTC().After(c.LastUpdated.Add(time.Hour*1)) {
 			fmt.Printf("Updating %v+", c.LastUpdated)
 			cc, err := app.createCarClient(c)
@@ -232,9 +254,17 @@ func readCars(app solarChargeTesla, ctx context.Context) ([]car, error) {
 				c.Longitude = carData.Longitude
 				c.Latitude = carData.Latitude
 				c.LastUpdated = time.Now().UTC()
+				c.ChargeLimit = carData.ChargeLimit
+				c.IsCharging = carData.IsCharging
+				c.IsPluggedIn = carData.IsPluggedIn
+				if !carData.IsCharging {
+					c.IsChargingBySolar = false
+				}
+				c.documentId = doc.Ref.ID
 			} else {
 				fmt.Printf("Failed to read tesla battery level: %v\n", err)
 			}
+			// TODO update firestore document
 		}
 		cars = append(cars, c)
 	}

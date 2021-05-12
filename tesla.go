@@ -122,6 +122,11 @@ type wakeDataResponse struct {
 	Wake wakeData `json:"response"`
 }
 
+type commandResponse struct {
+	Reason string `json:"reason"`
+	Result bool   `json:"result"`
+}
+
 func wakeCar(cac carAPIClient, carID int64) error {
 	var w wakeDataResponse
 	for i := 1; i < 15; i++ {
@@ -177,6 +182,9 @@ type carData struct {
 	BatteryLevel int32
 	Longitude    float64
 	Latitude     float64
+	ChargeLimit  int32
+	IsCharging   bool
+	IsPluggedIn  bool
 }
 
 type teslaClient struct {
@@ -201,13 +209,33 @@ func (t teslaClient) getCarData(carID int64) (*carData, error) {
 		BatteryLevel: v.Car.ChargeState.BatteryLevel,
 		Longitude:    v.Car.DriveState.Longitude,
 		Latitude:     v.Car.DriveState.Latitude,
+		ChargeLimit:  v.Car.ChargeState.ChargeLimitSoc,
+		IsCharging:   v.Car.ChargeState.ChargerPower > 0,
+		IsPluggedIn:  false, // TODO
 	}, nil
 }
 
+func (t teslaClient) command(carID int64, command string) error {
+	if err := ensureAwake(t.apiClient, carID); err != nil {
+		return errors.Wrap(err, "waking car")
+	}
+	resp, err := t.apiClient.makeRequest("POST", fmt.Sprintf("/api/1/vehicles/%d/command/%s", carID, command))
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("sending command: %s", command))
+	}
+	defer resp.Body.Close()
+	var c commandResponse
+	err = json.NewDecoder(resp.Body).Decode(&c)
+	if err != nil {
+		return errors.Wrap(err, "parsing command response")
+	}
+	return nil
+}
+
 func (t teslaClient) startCharging(carID int64) error {
-	return errors.New("Not implemented")
+	return t.command(carID, "charge_start")
 }
 
 func (t teslaClient) stopCharging(carID int64) error {
-	return errors.New("Not implemented")
+	return t.command(carID, "charge_stop")
 }
