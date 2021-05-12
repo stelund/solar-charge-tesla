@@ -106,7 +106,6 @@ func startStopCharge(a solarChargeTesla, s site, c car, ctx context.Context) err
 				return err
 			}
 			return setIsChargingBySolar(a, c, ctx)
-			// TODO, set IsChargingBySolar to true
 		}
 	} else if c.IsChargingBySolar && c.IsCharging && s.SolarPower < s.StopChargeTreshold {
 		return client.stopCharging(c.CarID)
@@ -191,10 +190,11 @@ func (a realApp) close() error {
 }
 
 func readSites(app solarChargeTesla, ctx context.Context) ([]site, error) {
-	iter := app.getFirestoreClient().Collection("sites").Documents(ctx)
+	fs := app.getFirestoreClient()
+	iter := fs.Collection("sites").Documents(ctx)
 	sites := []site{}
 	for {
-		doc, err := iter.Next()
+		snap, err := iter.Next()
 		if err == iterator.Done {
 			break
 		}
@@ -202,7 +202,7 @@ func readSites(app solarChargeTesla, ctx context.Context) ([]site, error) {
 			return nil, err
 		}
 		var s site
-		doc.DataTo(&s)
+		snap.DataTo(&s)
 		if time.Now().UTC().After(s.LastUpdated.Add(time.Hour * 1)) {
 			sar, err := app.createSolarClient(s)
 			if err != nil {
@@ -213,6 +213,7 @@ func readSites(app solarChargeTesla, ctx context.Context) ([]site, error) {
 				s.SolarPower = power
 				s.LastUpdated = time.Now().UTC()
 			}
+			snap.Ref.Set(ctx, s)
 		}
 		sites = append(sites, s)
 	}
@@ -229,7 +230,7 @@ func readCars(app solarChargeTesla, ctx context.Context) ([]car, error) {
 	iter := app.getFirestoreClient().Collection("cars").Documents(ctx)
 	cars := []car{}
 	for {
-		doc, err := iter.Next()
+		snap, err := iter.Next()
 		if err == iterator.Done {
 			break
 		}
@@ -237,7 +238,7 @@ func readCars(app solarChargeTesla, ctx context.Context) ([]car, error) {
 			return nil, err
 		}
 		var c car
-		err = doc.DataTo(&c)
+		err = snap.DataTo(&c)
 		if err != nil {
 			return nil, err
 		}
@@ -260,11 +261,11 @@ func readCars(app solarChargeTesla, ctx context.Context) ([]car, error) {
 				if !carData.IsCharging {
 					c.IsChargingBySolar = false
 				}
-				c.documentId = doc.Ref.ID
+				c.documentId = snap.Ref.ID
+				snap.Ref.Set(ctx, c)
 			} else {
 				fmt.Printf("Failed to read tesla battery level: %v\n", err)
 			}
-			// TODO update firestore document
 		}
 		cars = append(cars, c)
 	}

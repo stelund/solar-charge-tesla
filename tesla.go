@@ -11,6 +11,7 @@ import (
 )
 
 type vehiclesData struct {
+	ID        int64  `json:"id"`
 	VehicleID int64  `json:"vehicle_id"`
 	State     string `json:"state"`
 	InService bool   `json:"in_service"`
@@ -34,7 +35,6 @@ type chargeStates struct {
 	ChargeLimitSocStd           int32   `json:"charge_limit_soc_std"`
 	ChargeMilesAddedIdeal       float64 `json:"charge_miles_added_ideal"`
 	ChargeMilesAddedRated       float64 `json:"charge_miles_added_rated"`
-	ChargePortColdWeatherMode   string  `json:"charge_port_cold_weather_mode"`
 	ChargePortDoorOpen          bool    `json:"charge_port_door_open"`
 	ChargePortLatch             string  `json:"charge_port_latch"`
 	ChargeRate                  float64 `json:"charge_rate"`
@@ -97,6 +97,7 @@ type teslaAPIClient struct {
 
 type carAPIClient interface {
 	makeRequest(string, string) (*http.Response, error)
+	sleep(time.Duration)
 }
 
 func (t teslaAPIClient) makeRequest(method string, path string) (*http.Response, error) {
@@ -106,12 +107,16 @@ func (t teslaAPIClient) makeRequest(method string, path string) (*http.Response,
 		Host:   "owner-api.teslamotors.com",
 		Path:   path,
 	}
-	req, err := http.NewRequest("POST", u.String(), nil)
+	req, err := http.NewRequest(method, u.String(), nil)
 	if err != nil {
 		return &http.Response{}, err
 	}
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", t.accessToken))
 	return client.Do(req)
+}
+
+func (t teslaAPIClient) sleep(d time.Duration) {
+	time.Sleep(d)
 }
 
 type wakeData struct {
@@ -130,19 +135,20 @@ type commandResponse struct {
 func wakeCar(cac carAPIClient, carID int64) error {
 	var w wakeDataResponse
 	for i := 1; i < 15; i++ {
-		resp, err := cac.makeRequest("POST", fmt.Sprintf("/api/1/vehicles/%d/wake", carID))
+		resp, err := cac.makeRequest("POST", fmt.Sprintf("/api/1/vehicles/%d/wake_up", carID))
 		if err != nil {
 			return errors.Wrap(err, "posting to wake endpoint")
 		}
 		defer resp.Body.Close()
+
 		err = json.NewDecoder(resp.Body).Decode(&w)
 		if err != nil {
-			return err
+			return errors.Wrap(err, fmt.Sprintf("Error parsing body"))
 		}
 		if w.Wake.State == "online" {
 			return nil
 		}
-		time.Sleep(2)
+		cac.sleep(3 * time.Second)
 	}
 	return errors.New(fmt.Sprintf("Car is not waking. Still in state %s", w.Wake.State))
 }
@@ -162,7 +168,7 @@ func getCarState(cac carAPIClient, carID int64) (string, error) {
 		return "", errors.Wrap(err, "parsing vehicles")
 	}
 	for _, v := range vr.Vehicles {
-		if v.VehicleID == carID {
+		if v.ID == carID {
 			return v.State, nil
 		}
 	}

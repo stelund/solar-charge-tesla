@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+	"time"
 )
 
 type fakeResponse struct {
@@ -33,6 +34,8 @@ func (fta fakeTeslaClient) makeRequest(method string, path string) (*http.Respon
 	}, nil
 }
 
+func (t fakeTeslaClient) sleep(_ time.Duration) {}
+
 func TestWakeCar(t *testing.T) {
 	tests := []struct {
 		state   string
@@ -46,7 +49,7 @@ func TestWakeCar(t *testing.T) {
 		fta := &fakeTeslaClient{
 			[]fakeResponse{
 				{
-					Path:       "/api/1/vehicles/1234/wake",
+					Path:       "/api/1/vehicles/1234/wake_up",
 					StatusCode: 200,
 					Body: fmt.Sprintf(`{
 						  		   "response": {
@@ -82,12 +85,14 @@ func TestGetCarState(t *testing.T) {
 					StatusCode: 200,
 					Body: fmt.Sprintf(`{
 									"response": [{
-										"vehicle_id": 1235,
+										"id": 1235,
+										"vehicle_id": 12351,
 										"state": "unknown",
 										"in_service": false
 										},
 										{
-										"vehicle_id": 1234,
+										"id": 1234,
+										"vehicle_id": 12341,
 										"state": "%s",
 										"in_service": false
 										}]
@@ -124,7 +129,8 @@ func TestGetCarData(t *testing.T) {
 					Body: `{
 							"response": [
 								{
-									"vehicle_id": 1234,
+									"id": 1234,
+									"vehicle_id": 12341,
 									"state": "online",
 									"in_service": false
 								}
@@ -335,7 +341,7 @@ func TestGetCarData(t *testing.T) {
 		cc := teslaClient{apiClient: fta}
 		carData, err := cc.getCarData(1234)
 		if err != nil {
-			t.Errorf("Didnt expect error fetching car data %v+", err)
+			t.Errorf("Didnt expect error fetching car data %v", err)
 		}
 		if test.batteryLevel != carData.BatteryLevel {
 			t.Errorf("Expected state %d but was %d", test.batteryLevel, carData.BatteryLevel)
