@@ -19,16 +19,16 @@ import (
 const startChargeDiff int32 = 5
 
 type site struct {
-	Name                string    `firestore:"name"`
-	Vendor              string    `firestore:"vendor"`
-	SiteId              int       `firestore:"siteId"`
-	ApiKey              string    `firestore:"apikey"`
-	LastUpdated         time.Time `firestore:"lastUpdated"`
-	SolarPower          float64   `firestore:"solarPower"`
-	StartChargeTreshold float64   `firestore:"startChargeTreshold"`
-	StopChargeTreshold  float64   `firestore:"stopChargeTreshold"`
-	Longitude           float64   `firestore:"longitude"`
-	Latitude            float64   `firestore:"latitude"`
+	Name                 string    `firestore:"name"`
+	Vendor               string    `firestore:"vendor"`
+	SiteId               int       `firestore:"siteId"`
+	ApiKey               string    `firestore:"apikey"`
+	LastUpdated          time.Time `firestore:"lastUpdated"`
+	SolarPower           float64   `firestore:"solarPower"`
+	StartChargeThreshold float64   `firestore:"startChargeThreshold"`
+	StopChargeThreshold  float64   `firestore:"stopChargeThreshold"`
+	Longitude            float64   `firestore:"longitude"`
+	Latitude             float64   `firestore:"latitude"`
 }
 
 type car struct {
@@ -99,7 +99,7 @@ func startStopCharge(a solarChargeTesla, s site, c car, ctx context.Context) err
 	if err != nil {
 		return err
 	}
-	if !c.IsCharging && c.IsPluggedIn && s.SolarPower > s.StartChargeTreshold {
+	if !c.IsCharging && c.IsPluggedIn && s.SolarPower > s.StartChargeThreshold {
 		if c.ChargeLimit-c.BatteryLevel > startChargeDiff {
 			err := client.startCharging(c.CarID)
 			if err != nil {
@@ -107,7 +107,7 @@ func startStopCharge(a solarChargeTesla, s site, c car, ctx context.Context) err
 			}
 			return setIsChargingBySolar(a, c, ctx)
 		}
-	} else if c.IsChargingBySolar && c.IsCharging && s.SolarPower < s.StopChargeTreshold {
+	} else if c.IsChargingBySolar && c.IsCharging && s.SolarPower < s.StopChargeThreshold {
 		return client.stopCharging(c.CarID)
 	}
 	return nil

@@ -177,17 +177,17 @@ func TestStartStopCharge(t *testing.T) {
 		s    site
 		want string
 	}{
-		{c: car{CarID: 3456, IsCharging: false, BatteryLevel: 40, ChargeLimit: 70, IsPluggedIn: true}, s: site{SolarPower: 1000.0, StartChargeTreshold: 500.0}, want: "startCharging"},
-		{c: car{CarID: 3456, IsCharging: false, BatteryLevel: 69, ChargeLimit: 70, IsPluggedIn: true}, s: site{SolarPower: 1000.0, StartChargeTreshold: 500.0}, want: "nil"},
-		{c: car{CarID: 3456, IsCharging: false, BatteryLevel: 70, ChargeLimit: 70, IsPluggedIn: true}, s: site{SolarPower: 1000.0, StartChargeTreshold: 500.0}, want: "nil"},
+		{c: car{CarID: 3456, IsCharging: false, BatteryLevel: 40, ChargeLimit: 70, IsPluggedIn: true}, s: site{SolarPower: 1000.0, StartChargeThreshold: 500.0}, want: "startCharging"},
+		{c: car{CarID: 3456, IsCharging: false, BatteryLevel: 69, ChargeLimit: 70, IsPluggedIn: true}, s: site{SolarPower: 1000.0, StartChargeThreshold: 500.0}, want: "nil"},
+		{c: car{CarID: 3456, IsCharging: false, BatteryLevel: 70, ChargeLimit: 70, IsPluggedIn: true}, s: site{SolarPower: 1000.0, StartChargeThreshold: 500.0}, want: "nil"},
 
-		{c: car{CarID: 3456, IsCharging: false, BatteryLevel: 40, ChargeLimit: 70, IsPluggedIn: true}, s: site{SolarPower: 400.0, StartChargeTreshold: 500.0}, want: "nil"},
+		{c: car{CarID: 3456, IsCharging: false, BatteryLevel: 40, ChargeLimit: 70, IsPluggedIn: true}, s: site{SolarPower: 400.0, StartChargeThreshold: 500.0}, want: "nil"},
 
-		{c: car{CarID: 3456, IsCharging: true, ChargeLimit: 70, IsChargingBySolar: true}, s: site{SolarPower: 1000.0, StopChargeTreshold: 500.0}, want: "nil"},
-		{c: car{CarID: 3456, IsCharging: true, ChargeLimit: 70, IsChargingBySolar: true}, s: site{SolarPower: 400.0, StopChargeTreshold: 500.0}, want: "stopCharging"},
+		{c: car{CarID: 3456, IsCharging: true, ChargeLimit: 70, IsChargingBySolar: true}, s: site{SolarPower: 1000.0, StopChargeThreshold: 500.0}, want: "nil"},
+		{c: car{CarID: 3456, IsCharging: true, ChargeLimit: 70, IsChargingBySolar: true}, s: site{SolarPower: 400.0, StopChargeThreshold: 500.0}, want: "stopCharging"},
 
 		// too little solar will stop charging
-		{c: car{CarID: 3456, IsCharging: true, ChargeLimit: 70, IsChargingBySolar: false}, s: site{SolarPower: 400.0, StopChargeTreshold: 500.0}, want: "nil"},
+		{c: car{CarID: 3456, IsCharging: true, ChargeLimit: 70, IsChargingBySolar: false}, s: site{SolarPower: 400.0, StopChargeThreshold: 500.0}, want: "nil"},
 	}
 
 	for _, test := range tests {
@@ -206,7 +206,7 @@ func TestStartStopCharge(t *testing.T) {
 	c := car{CarID: 1, IsCharging: false, BatteryLevel: 40, ChargeLimit: 70, IsPluggedIn: true, documentId: "document-id"}
 	d := app.fc.Doc("cars/document-id")
 	d.Set(ctx, c);
-	err := startStopCharge(app, site{SolarPower: 1000.0, StartChargeTreshold: 500.0}, c, ctx)
+	err := startStopCharge(app, site{SolarPower: 1000.0, StartChargeThreshold: 500.0}, c, ctx)
 	if err != nil {
 		t.Fatalf("Testing setIsChargingBySolar err: %v+", err)
 	}
