@@ -17,3 +17,7 @@ This project is still a work in progress.
 ## Environment
 
 The aim for this project is to run on Google's cloud platform with zero costs for single car use.
+
+## License
+
+BSD 3-Clause License
