@@ -57,7 +57,7 @@ type chargeStates struct {
 	MaxRangeChargeCounter       int32   `json:"max_range_charge_counter"`
 	NotEnoughPowerToHeat        bool    `json:"not_enough_power_to_heat"`
 	ScheduledChargingPending    bool    `json:"scheduled_charging_pending"`
-	ScheduledChargingStartTime  string  `json:"scheduled_charging_start_time"`
+	ScheduledChargingStartTime  int64   `json:"scheduled_charging_start_time"`
 	TimeToFullCharge            float64 `json:"time_to_full_charge"`
 	Timestamp                   int64   `json:"timestamp"`
 	TripCharging                bool    `json:"trip_charging"`
@@ -135,6 +135,7 @@ type commandResponse struct {
 func wakeCar(cac carAPIClient, carID int64) error {
 	var w wakeDataResponse
 	for i := 1; i < 15; i++ {
+		println("Waking car...")
 		resp, err := cac.makeRequest("POST", fmt.Sprintf("/api/1/vehicles/%d/wake_up", carID))
 		if err != nil {
 			return errors.Wrap(err, "posting to wake endpoint")
@@ -216,8 +217,8 @@ func (t teslaClient) getCarData(carID int64) (*carData, error) {
 		Longitude:    v.Car.DriveState.Longitude,
 		Latitude:     v.Car.DriveState.Latitude,
 		ChargeLimit:  v.Car.ChargeState.ChargeLimitSoc,
-		IsCharging:   v.Car.ChargeState.ChargerPower > 0,
-		IsPluggedIn:  false, // TODO
+		IsCharging:   v.Car.ChargeState.ChargerActualCurrent > 0,
+		IsPluggedIn:  v.Car.ChargeState.ChargePortLatch == "Engaged",
 	}, nil
 }
 
